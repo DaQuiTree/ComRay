@@ -7,51 +7,80 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    mSerialPort = new QSerialPort;
+
     //PushButoon Slot
     QObject::connect(ui->pButton_Start, SIGNAL(clicked(bool)), this, SLOT(StartSlot()));
     QObject::connect(ui->pButton_Reset, SIGNAL(clicked(bool)), this, SLOT(ResetSlot()));
-   // QObject::connect(ui->comboBox_port,SIGNAL(), this, SLOT());
-    //Init Serial Port
-    InitSerialPort();
+    QObject::connect(this->mSerialPort, SIGNAL(readyRead()), this, SLOT(HandlingReadDataSlot()));
+
+    //Init Timer
+    mTimer = new QTimer;
+    connect(mTimer, SIGNAL(timeout()), this, SLOT(WriteDataSlot()));
+
+    //Init UI
+    InitUI();
 }
 
 MainWindow::~MainWindow()
 {
+    delete mSerialPort;
     delete ui;
 }
 
 void MainWindow::StartSlot()
 {
-    mSerialPort = new QSerialPort;
     QSerialPort::BaudRate mBaudRate;
+    QSerialPort::Parity mParity;
+    static bool portStatus = 0;
 
-    switch(ui->comboBox_baudrate->currentIndex())
+    if(!portStatus)
     {
-        case 0: mBaudRate = QSerialPort::Baud115200; break;
-        case 1: mBaudRate = QSerialPort::Baud57600; break;
-        case 2: mBaudRate = QSerialPort::Baud38400; break;
-        case 3: mBaudRate = QSerialPort::Baud19200; break;
-        case 4: mBaudRate = QSerialPort::Baud9600; break;
-        default: mBaudRate = QSerialPort::Baud57600; break;
-    }
+        mSerialPort->setPortName(ui->comboBox_port->currentText());//port
 
-    mSerialPort->setBaudRate(mBaudRate);
-    mSerialPort->setDataBits(QSerialPort::Data8);
-    mSerialPort->setStopBits(QSerialPort::OneStop);
-    mSerialPort->setParity(QSerialPort::NoParity);
-    mSerialPort->setFlowControl(QSerialPort::NoFlowControl);
+        switch(ui->comboBox_baudrate->currentIndex())//baudRate
+        {
+            case 0: mBaudRate = QSerialPort::Baud115200; break;
+            case 1: mBaudRate = QSerialPort::Baud57600; break;
+            case 2: mBaudRate = QSerialPort::Baud38400; break;
+            case 3: mBaudRate = QSerialPort::Baud19200; break;
+            case 4: mBaudRate = QSerialPort::Baud9600; break;
+            default: mBaudRate = QSerialPort::Baud57600; break;
+        }
+        mSerialPort->setBaudRate(mBaudRate);
 
-    bool portStatus = mSerialPort->open(QIODevice::ReadWrite);
-    if(portStatus){
-        ui->label_PortStatus->setText("已开启");
+        switch(ui->comboBox_Parity->currentIndex())//baudRate
+        {
+            case 0: mParity = QSerialPort::NoParity; break;
+            case 1: mParity = QSerialPort::EvenParity; break;
+            case 2: mParity = QSerialPort::OddParity; break;
+            default: mParity = QSerialPort::NoParity; break;
+        }
+        mSerialPort->setParity(mParity);
+
+        mSerialPort->setDataBits(QSerialPort::Data8); //other
+        mSerialPort->setStopBits(QSerialPort::OneStop);
+        mSerialPort->setFlowControl(QSerialPort::NoFlowControl);
+
+        portStatus = mSerialPort->open(QIODevice::ReadWrite);
+        if(portStatus){
+            ui->label_PortStatus->setText("串口已开启");
+            ui->pButton_Start->setText("close");
+            mTimer->start(200); //启动发送
+        }else{
+            ui->label_PortStatus->setText("打开失败");
+        }
     }else{
-        ui->label_PortStatus->setText("打开失败");
+        mTimer->stop();
+        mSerialPort->close();
+        portStatus = 0;
+        ui->label_PortStatus->setText("串口已关闭");
+        ui->pButton_Start->setText("start");
     }
 }
 
 void MainWindow::ResetSlot()
 {
-    ui->label_PortStatus->setText("已关闭");
     ui->lineEdit_Cnt->setText("00");
 }
 
@@ -65,15 +94,48 @@ void MainWindow::SelectBaudRateSlot()
 
 }
 
-void MainWindow::InitSerialPort()
+void MainWindow::InitUI()
 {
+    //Init combobox baudrate & parity
+    ui->comboBox_baudrate->setCurrentText("57600");//57600
+    ui->comboBox_Parity->setCurrentText("None");//parityNone
+
+    //Init Serial Port
     QList<QSerialPortInfo> portList;
     QSerialPortInfo *mSerialPortInfo = new QSerialPortInfo;
 
     portList = mSerialPortInfo->availablePorts();
-    QMessageBox::information(this,"info",QString::number(portList.size()));
     for(int i=0; i < portList.size(); i++)
     {
         ui->comboBox_port->addItem(portList.at(i).portName());
     }
+    delete mSerialPortInfo;
+}
+
+void MainWindow::HandlingReadDataSlot()
+{
+    int numRead = 0;
+    char buffer[64];
+    char code[] = {'0','0',' ','0','0'};
+    char hexMap[] ={'0','1','2','3','4','5','6','7',
+                    '8','9','A','B','C','D','E','F'};
+
+    numRead  = mSerialPort->read(buffer, 64);
+    //QMessageBox::information(this,"info",QString::fromLocal8Bit(buffer));
+    code[0] = hexMap[buffer[3]/16];
+    code[1] = hexMap[buffer[3]%16];
+    code[3] = hexMap[buffer[4]/16];
+    code[4] = hexMap[buffer[4]%16];
+    QMessageBox::information(this,"info",QString::fromLocal8Bit(code));
+    ui->lineEdit_Cnt->setText(QString::fromUtf8(code,5));
+}
+
+void MainWindow::WriteDataSlot()
+{
+    static int pos = 1;
+    char writeBuf[2] = {0x01, 0x55};
+
+    writeBuf[0] = pos++;
+    if(pos > 4)pos = 1;
+    mSerialPort->write(writeBuf, 2);
 }

@@ -11,6 +11,7 @@
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <QMessageBox>
+#include <QTimer>
 
 namespace Ui {
 class MainWindow;
@@ -30,10 +31,14 @@ private slots:
     void SelectPortSlot();
     void SelectBaudRateSlot();
 
+    void HandlingReadDataSlot();
+    void WriteDataSlot();
+
 private:
     Ui::MainWindow *ui;
     QSerialPort *mSerialPort;
-    void InitSerialPort();
+    QTimer* mTimer;
+    void InitUI();
 };
 
 #endif // MAINWINDOW_H
