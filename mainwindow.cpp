@@ -81,7 +81,7 @@ void MainWindow::StartSlot()
 
 void MainWindow::ResetSlot()
 {
-    ui->lineEdit_Cnt->setText("00");
+    ui->lineEdit_Cnt->setText("00 00");
 }
 
 void MainWindow::SelectPortSlot()
@@ -115,19 +115,23 @@ void MainWindow::InitUI()
 void MainWindow::HandlingReadDataSlot()
 {
     int numRead = 0;
-    char buffer[64];
-    char code[] = {'0','0',' ','0','0'};
+    char buffer[64] = {0};
+    char code[] = "00 00";
     char hexMap[] ={'0','1','2','3','4','5','6','7',
                     '8','9','A','B','C','D','E','F'};
 
     numRead  = mSerialPort->read(buffer, 64);
-    //QMessageBox::information(this,"info",QString::fromLocal8Bit(buffer));
-    code[0] = hexMap[buffer[3]/16];
-    code[1] = hexMap[buffer[3]%16];
-    code[3] = hexMap[buffer[4]/16];
-    code[4] = hexMap[buffer[4]%16];
-    QMessageBox::information(this,"info",QString::fromLocal8Bit(code));
-    ui->lineEdit_Cnt->setText(QString::fromUtf8(code,5));
+    if(numRead == 0)return;
+
+    code[0] = hexMap[(unsigned char)buffer[4]/16];
+    code[1] = hexMap[(unsigned char)buffer[4]%16];
+    code[3] = hexMap[(unsigned char)buffer[5]/16];
+    code[4] = hexMap[(unsigned char)buffer[5]%16];
+
+    QString str(code);
+    //QMessageBox::information(this,"info",QString::fromUtf8(code));
+    ui->lineEdit_Cnt->setText(str);
+
 }
 
 void MainWindow::WriteDataSlot()
